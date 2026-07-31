@@ -1,13 +1,33 @@
-import { drizzle } from "drizzle-orm/d1";
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
 import * as schema from "./schema";
 
-export async function getDb() {
-  const { env } = await import("cloudflare:workers");
-  if (!env.DB) {
-    throw new Error(
-      "Cloudflare D1 binding `DB` is unavailable. Set the `d1` field in .openai/hosting.json to `DB` or let your control plane inject the real binding values before using the database."
-    );
-  }
+type SqlClient = ReturnType<typeof postgres>;
 
-  return drizzle(env.DB, { schema });
+const globalForDatabase = globalThis as typeof globalThis & {
+  franceSolidaireSql?: SqlClient;
+};
+
+function databaseUrl() {
+  const url = process.env.DATABASE_URL;
+  if (!url) {
+    throw new Error("DATABASE_URL est absente.");
+  }
+  return url;
+}
+
+export function getSql() {
+  if (!globalForDatabase.franceSolidaireSql) {
+    globalForDatabase.franceSolidaireSql = postgres(databaseUrl(), {
+      max: Number(process.env.DATABASE_POOL_SIZE ?? 10),
+      idle_timeout: 20,
+      connect_timeout: 10,
+      prepare: false,
+    });
+  }
+  return globalForDatabase.franceSolidaireSql;
+}
+
+export function getDb() {
+  return drizzle(getSql(), { schema });
 }

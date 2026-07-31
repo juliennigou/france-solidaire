@@ -54,7 +54,7 @@
   --secondary: #eeeae0;
   --secondary-foreground: #263d38;
   --muted: #efede6;
-  --muted-foreground: #697973;
+  --muted-foreground: #53645e;
   --accent: #eaf2ee;
   --accent-foreground: #1f6c5d;
   --destructive: #c94434;
@@ -63,7 +63,7 @@
   --ring: #378774;
   --radius: 0.85rem;
   --ink: #263d38;
-  --coral: #e36550;
+  --coral: #c94434;
   --terracotta: #a94d3d;
   --teal: #267362;
   --cream: #f4f0e6;
@@ -85,6 +85,24 @@ body {
   color: var(--foreground);
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
   text-rendering: optimizeLegibility;
+}
+
+.skip-link {
+  position: fixed;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 100;
+  transform: translateY(-180%);
+  border-radius: 0.75rem;
+  background: var(--ink);
+  padding: 0.65rem 1rem;
+  color: white;
+  font-weight: 700;
+  transition: transform 120ms ease;
+}
+
+.skip-link:focus {
+  transform: translateY(0);
 }
 
 button,

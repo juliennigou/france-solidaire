@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useState } from "react";
 import {
   ArrowDown,
   ArrowLeft,
@@ -11,10 +11,10 @@ import {
   Check,
   ChevronRight,
   CircleHelp,
-  Clock3,
   Construction,
   Dog,
   FileText,
+  Flag,
   HandHeart,
   Heart,
   Home,
@@ -76,6 +76,7 @@ import {
 import { cn } from "@/lib/utils";
 
 type Role = "helper" | "requester" | "both";
+type FeedKind = AnnouncementKind | "all";
 
 type PublishForm = {
   kind: AnnouncementKind;
@@ -86,6 +87,7 @@ type PublishForm = {
   email: string;
   commune: string;
   availability: string;
+  website: string;
 };
 
 const emptyPublishForm: PublishForm = {
@@ -97,6 +99,7 @@ const emptyPublishForm: PublishForm = {
   email: "",
   commune: "",
   availability: "",
+  website: "",
 };
 
 const categoryIcons: Record<string, LucideIcon> = {
@@ -142,11 +145,13 @@ function initials(name: string) {
 
 export function FranceSolidaireApp({
   initialAnnouncements,
+  demoMode = false,
 }: {
   initialAnnouncements: Announcement[];
+  demoMode?: boolean;
 }) {
   const [announcements, setAnnouncements] = useState(initialAnnouncements);
-  const [kind, setKind] = useState<AnnouncementKind>("need");
+  const [kind, setKind] = useState<FeedKind>("need");
   const [category, setCategory] = useState("Toutes");
   const [search, setSearch] = useState("");
   const [onboardingOpen, setOnboardingOpen] = useState(false);
@@ -154,46 +159,34 @@ export function FranceSolidaireApp({
   const [role, setRole] = useState<Role>("helper");
   const [onboardingCategory, setOnboardingCategory] = useState("Transport");
   const [onboardingCommune, setOnboardingCommune] = useState("");
-  const [onboardingAvailability, setOnboardingAvailability] = useState("");
   const [publishOpen, setPublishOpen] = useState(false);
-  const [publishForm, setPublishForm] =
-    useState<PublishForm>(emptyPublishForm);
+  const [publishForm, setPublishForm] = useState<PublishForm>(emptyPublishForm);
   const [publishing, setPublishing] = useState(false);
   const [selectedAnnouncement, setSelectedAnnouncement] =
     useState<Announcement | null>(null);
   const [replyOpen, setReplyOpen] = useState(false);
   const [replying, setReplying] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
+  const [accountLoading, setAccountLoading] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reporting, setReporting] = useState(false);
 
   useEffect(() => {
-    let cancelled = false;
-    fetch("/api/announcements")
-      .then(async (response) =>
-        response.ok
-          ? ((await response.json()) as {
-              announcements?: Announcement[];
-            })
-          : null,
-      )
-      .then((data) => {
-        if (!cancelled && data?.announcements?.length) {
-          setAnnouncements(data.announcements);
-        }
-      })
-      .catch(() => {
-        // The server-rendered examples remain available if local persistence
-        // has not been started yet.
-      });
-    return () => {
-      cancelled = true;
+    if (!mobileOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMobileOpen(false);
     };
-  }, []);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [mobileOpen]);
 
   const filteredAnnouncements = useMemo(() => {
     const normalizedSearch = search.trim().toLocaleLowerCase("fr");
     return announcements.filter((announcement) => {
-      const matchesKind = announcement.kind === kind;
+      const matchesKind = kind === "all" || announcement.kind === kind;
       const matchesCategory =
         category === "Toutes" || announcement.category === category;
       const haystack =
@@ -220,8 +213,8 @@ export function FranceSolidaireApp({
   }
 
   function finishOnboarding() {
-    const feedKind: AnnouncementKind =
-      role === "helper" ? "need" : role === "requester" ? "offer" : "need";
+    const feedKind: FeedKind =
+      role === "helper" ? "need" : role === "requester" ? "offer" : "all";
     setKind(feedKind);
     setCategory(onboardingCategory);
     setSearch(onboardingCommune);
@@ -230,7 +223,9 @@ export function FranceSolidaireApp({
       description:
         role === "helper"
           ? "Voici les personnes que vous pourriez aider."
-          : "Voici les propositions qui peuvent vous être utiles.",
+          : role === "requester"
+            ? "Voici les propositions qui peuvent vous être utiles."
+            : "Voici les besoins et les propositions près de chez vous.",
     });
     window.setTimeout(scrollToAnnouncements, 150);
   }
@@ -244,17 +239,16 @@ export function FranceSolidaireApp({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(publishForm),
       });
-      const data = response.ok
-        ? ((await response.json()) as { announcement?: Announcement })
-        : null;
-      const announcement: Announcement =
-        data?.announcement ??
-        ({
-          ...publishForm,
-          id: crypto.randomUUID(),
-          status: "active",
-          createdAt: Date.now(),
-        } satisfies Announcement);
+      const data = (await response.json()) as {
+        announcement?: Announcement;
+        error?: string;
+      };
+      if (!response.ok || !data.announcement) {
+        throw new Error(
+          data.error ?? "La publication n’a pas été enregistrée.",
+        );
+      }
+      const announcement = data.announcement;
       setAnnouncements((current) => [announcement, ...current]);
       setKind(announcement.kind);
       setCategory("Toutes");
@@ -262,11 +256,15 @@ export function FranceSolidaireApp({
       setPublishOpen(false);
       toast.success("Votre annonce est en ligne", {
         description:
-          "Un lien de gestion vient d’être simulé pour cette première version.",
+          "Le lien privé de gestion a été mis en file pour envoi par email.",
       });
       window.setTimeout(scrollToAnnouncements, 150);
-    } catch {
-      toast.error("Impossible de publier pour le moment.");
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Impossible de publier pour le moment.",
+      );
     } finally {
       setPublishing(false);
     }
@@ -286,39 +284,97 @@ export function FranceSolidaireApp({
           firstName: formData.get("firstName"),
           email: formData.get("email"),
           message: formData.get("message"),
+          website: formData.get("website"),
         }),
       });
-      if (!response.ok) throw new Error("invalid");
+      const data = (await response.json()) as { error?: string };
+      if (!response.ok) throw new Error(data.error);
       setReplyOpen(false);
-      toast.success("Votre message est parti", {
-        description: `${selectedAnnouncement.firstName} pourra vous répondre directement par email.`,
+      toast.success("Confirmez votre adresse email", {
+        description: `Un lien vient d’être mis en file. Votre message sera transmis à ${selectedAnnouncement.firstName} après votre confirmation.`,
       });
-    } catch {
-      toast.error("Vérifiez les informations saisies.");
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Vérifiez les informations saisies.",
+      );
     } finally {
       setReplying(false);
     }
   }
 
-  function submitAccount(event: FormEvent<HTMLFormElement>) {
+  async function submitAccount(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setAccountOpen(false);
-    toast.success("Lien de connexion préparé", {
-      description:
-        "L’envoi d’email sera activé lors du branchement du fournisseur transactionnel.",
-    });
+    setAccountLoading(true);
+    const formData = new FormData(event.currentTarget);
+    try {
+      const response = await fetch("/api/auth/magic-link", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: formData.get("email"),
+          website: formData.get("website"),
+        }),
+      });
+      const data = (await response.json()) as { error?: string };
+      if (!response.ok) throw new Error(data.error);
+      setAccountOpen(false);
+      toast.success("Lien de connexion mis en file", {
+        description: "Vérifiez votre boîte email dans quelques instants.",
+      });
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Connexion impossible.",
+      );
+    } finally {
+      setAccountLoading(false);
+    }
+  }
+
+  async function submitReport(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedAnnouncement) return;
+    setReporting(true);
+    const formData = new FormData(event.currentTarget);
+    try {
+      const response = await fetch("/api/reports", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          announcementId: selectedAnnouncement.id,
+          reason: formData.get("reason"),
+          details: formData.get("details"),
+          website: formData.get("website"),
+        }),
+      });
+      const data = (await response.json()) as { error?: string };
+      if (!response.ok) throw new Error(data.error);
+      setReportOpen(false);
+      toast.success("Signalement transmis", {
+        description: "Merci de contribuer à la sécurité de la communauté.",
+      });
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Signalement impossible.",
+      );
+    } finally {
+      setReporting(false);
+    }
   }
 
   return (
-    <main className="min-h-screen overflow-hidden bg-background">
-      <div className="demo-ribbon">
-        <Sparkles className="size-3.5" />
-        Aperçu du service · annonces illustratives
-      </div>
+    <main id="contenu" className="min-h-screen bg-background">
+      {demoMode && (
+        <div className="demo-ribbon">
+          <Sparkles className="size-3.5" />
+          Mode démonstration · les écritures nécessitent PostgreSQL
+        </div>
+      )}
 
       <header className="sticky top-0 z-40 border-b border-foreground/6 bg-background/92 backdrop-blur-xl">
         <div className="site-container flex h-18 items-center justify-between">
-          <a href="#" className="group flex items-center gap-2.5">
+          <a href="#contenu" className="group flex items-center gap-2.5">
             <span className="brand-mark">
               <Heart className="size-5 fill-current" />
             </span>
@@ -329,6 +385,7 @@ export function FranceSolidaireApp({
 
           <nav className="hidden items-center gap-8 text-sm font-medium text-muted-foreground md:flex">
             <button
+              type="button"
               className="transition-colors hover:text-ink"
               onClick={scrollToAnnouncements}
             >
@@ -363,7 +420,9 @@ export function FranceSolidaireApp({
           </div>
 
           <Button
-            aria-label="Ouvrir le menu"
+            aria-label={mobileOpen ? "Fermer le menu" : "Ouvrir le menu"}
+            aria-expanded={mobileOpen}
+            aria-controls="menu-mobile"
             variant="ghost"
             size="icon"
             className="md:hidden"
@@ -374,7 +433,10 @@ export function FranceSolidaireApp({
         </div>
 
         {mobileOpen && (
-          <div className="site-container grid gap-2 border-t py-4 md:hidden">
+          <div
+            id="menu-mobile"
+            className="site-container grid gap-2 border-t py-4 md:hidden"
+          >
             <Button
               variant="ghost"
               className="justify-start"
@@ -411,8 +473,8 @@ export function FranceSolidaireApp({
       <section className="hero-section">
         <div className="hero-orb hero-orb-one" />
         <div className="hero-orb hero-orb-two" />
-        <div className="site-container relative grid items-center gap-12 py-16 lg:grid-cols-[1.08fr_0.92fr] lg:py-24">
-          <div className="max-w-3xl">
+        <div className="site-container relative grid grid-cols-[minmax(0,1fr)] items-center gap-12 py-16 lg:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)] lg:py-24">
+          <div className="min-w-0 max-w-3xl">
             <Badge className="mb-7 h-7 border-terracotta/15 bg-terracotta/8 px-3 text-terracotta hover:bg-terracotta/8">
               <MapPin />
               L’entraide commence en Gironde
@@ -458,7 +520,7 @@ export function FranceSolidaireApp({
             </div>
           </div>
 
-          <div className="relative mx-auto w-full max-w-lg">
+          <div className="relative mx-auto min-w-0 w-full max-w-lg">
             <div className="absolute -inset-5 rotate-3 rounded-[2.4rem] bg-sun/35" />
             <div className="relative rounded-[2rem] border border-white/80 bg-white/88 p-5 shadow-[0_28px_80px_rgba(34,55,49,0.14)] backdrop-blur md:p-7">
               <div className="mb-5 flex items-center justify-between">
@@ -476,14 +538,16 @@ export function FranceSolidaireApp({
               </div>
 
               <div className="space-y-3">
-                {initialAnnouncements.slice(0, 3).map((announcement) => {
+                {announcements.slice(0, 3).map((announcement) => {
                   const Icon = categoryIcons[announcement.category] ?? Heart;
                   return (
                     <button
                       key={announcement.id}
+                      type="button"
                       className="group flex w-full items-center gap-3 rounded-2xl border border-ink/7 bg-cream/60 p-3.5 text-left transition hover:-translate-y-0.5 hover:border-coral/20 hover:bg-white hover:shadow-md"
                       onClick={() => {
                         setKind(announcement.kind);
+                        setCategory("Toutes");
                         setSearch(announcement.commune);
                         scrollToAnnouncements();
                       }}
@@ -534,7 +598,9 @@ export function FranceSolidaireApp({
             ["0 €", "l’entraide reste toujours gratuite"],
           ].map(([value, label]) => (
             <div key={value} className="px-5 py-7 text-center">
-              <p className="text-2xl font-bold tracking-tight text-ink">{value}</p>
+              <p className="text-2xl font-bold tracking-tight text-ink">
+                {value}
+              </p>
               <p className="mt-1 text-sm text-muted-foreground">{label}</p>
             </div>
           ))}
@@ -560,7 +626,7 @@ export function FranceSolidaireApp({
             <Button
               variant="outline"
               className="h-11 rounded-xl border-ink/10 bg-white px-5 text-ink"
-              onClick={() => openPublish(kind)}
+              onClick={() => openPublish(kind === "all" ? "need" : kind)}
             >
               <Heart className="text-coral" />
               Publier une annonce
@@ -576,6 +642,12 @@ export function FranceSolidaireApp({
               >
                 <TabsList className="h-11 w-full rounded-xl bg-cream p-1 lg:w-auto">
                   <TabsTrigger
+                    value="all"
+                    className="h-9 rounded-lg px-4 data-active:bg-white"
+                  >
+                    Tous
+                  </TabsTrigger>
+                  <TabsTrigger
                     value="need"
                     className="h-9 rounded-lg px-4 data-active:bg-white"
                   >
@@ -590,7 +662,10 @@ export function FranceSolidaireApp({
                 </TabsList>
               </Tabs>
 
-              <Separator orientation="vertical" className="hidden h-8 lg:block" />
+              <Separator
+                orientation="vertical"
+                className="hidden h-8 lg:block"
+              />
 
               <div className="relative min-w-0 flex-1">
                 <Search className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -603,7 +678,10 @@ export function FranceSolidaireApp({
                 />
               </div>
 
-              <Select value={category} onValueChange={(value) => setCategory(value ?? "Toutes")}>
+              <Select
+                value={category}
+                onValueChange={(value) => setCategory(value ?? "Toutes")}
+              >
                 <SelectTrigger
                   aria-label="Filtrer par catégorie"
                   className="h-11 w-full rounded-xl border-ink/8 px-3 lg:w-48"
@@ -625,10 +703,12 @@ export function FranceSolidaireApp({
           <div className="mt-5 flex gap-2 overflow-x-auto pb-2 scrollbar-none">
             {["Toutes", ...categories].map((item) => {
               const Icon =
-                item === "Toutes" ? Sparkles : categoryIcons[item] ?? Heart;
+                item === "Toutes" ? Sparkles : (categoryIcons[item] ?? Heart);
               return (
                 <button
                   key={item}
+                  type="button"
+                  aria-pressed={category === item}
                   className={cn(
                     "flex shrink-0 items-center gap-2 rounded-full border px-3.5 py-2 text-sm font-medium transition",
                     category === item
@@ -644,19 +724,34 @@ export function FranceSolidaireApp({
             })}
           </div>
 
+          <p
+            role="status"
+            aria-live="polite"
+            className="mt-5 text-sm font-medium text-muted-foreground"
+          >
+            {filteredAnnouncements.length} annonce
+            {filteredAnnouncements.length > 1 ? "s" : ""} affichée
+            {filteredAnnouncements.length > 1 ? "s" : ""}
+          </p>
+
           {filteredAnnouncements.length ? (
-            <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+            <ul className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
               {filteredAnnouncements.map((announcement) => (
-                <AnnouncementCard
-                  key={announcement.id}
-                  announcement={announcement}
-                  onReply={() => {
-                    setSelectedAnnouncement(announcement);
-                    setReplyOpen(true);
-                  }}
-                />
+                <li key={announcement.id} className="min-w-0">
+                  <AnnouncementCard
+                    announcement={announcement}
+                    onReply={() => {
+                      setSelectedAnnouncement(announcement);
+                      setReplyOpen(true);
+                    }}
+                    onReport={() => {
+                      setSelectedAnnouncement(announcement);
+                      setReportOpen(true);
+                    }}
+                  />
+                </li>
               ))}
-            </div>
+            </ul>
           ) : (
             <div className="mt-8 rounded-[1.5rem] border border-dashed border-ink/15 bg-white px-6 py-14 text-center">
               <span className="mx-auto flex size-12 items-center justify-center rounded-full bg-cream text-muted-foreground">
@@ -670,7 +765,7 @@ export function FranceSolidaireApp({
               </p>
               <Button
                 className="mt-5 bg-coral text-white"
-                onClick={() => openPublish(kind)}
+                onClick={() => openPublish(kind === "all" ? "need" : kind)}
               >
                 Publier une annonce
               </Button>
@@ -808,9 +903,19 @@ export function FranceSolidaireApp({
             <a href="#securite" className="hover:text-white">
               Sécurité
             </a>
-            <button className="hover:text-white" onClick={() => setAccountOpen(true)}>
+            <button
+              type="button"
+              className="hover:text-white"
+              onClick={() => setAccountOpen(true)}
+            >
               Mon compte
             </button>
+            <a href="/confidentialite" className="hover:text-white">
+              Confidentialité
+            </a>
+            <a href="/mentions-legales" className="hover:text-white">
+              Mentions légales
+            </a>
           </div>
         </div>
         <div className="site-container flex flex-col items-center justify-between gap-3 pt-6 text-xs text-white/40 md:flex-row">
@@ -830,8 +935,6 @@ export function FranceSolidaireApp({
         setCategory={setOnboardingCategory}
         commune={onboardingCommune}
         setCommune={setOnboardingCommune}
-        availability={onboardingAvailability}
-        setAvailability={setOnboardingAvailability}
         onFinish={finishOnboarding}
       />
 
@@ -855,7 +958,16 @@ export function FranceSolidaireApp({
       <AccountDialog
         open={accountOpen}
         onOpenChange={setAccountOpen}
+        loading={accountLoading}
         onSubmit={submitAccount}
+      />
+
+      <ReportDialog
+        open={reportOpen}
+        onOpenChange={setReportOpen}
+        announcement={selectedAnnouncement}
+        loading={reporting}
+        onSubmit={submitReport}
       />
     </main>
   );
@@ -864,12 +976,15 @@ export function FranceSolidaireApp({
 function AnnouncementCard({
   announcement,
   onReply,
+  onReport,
 }: {
   announcement: Announcement;
   onReply: () => void;
+  onReport: () => void;
 }) {
   const Icon = categoryIcons[announcement.category] ?? Heart;
   const isNeed = announcement.kind === "need";
+  const [expanded, setExpanded] = useState(false);
 
   return (
     <Card className="announcement-card border-0 py-0 ring-1 ring-ink/8">
@@ -902,16 +1017,30 @@ function AnnouncementCard({
       </CardHeader>
 
       <CardContent className="px-5">
-        <p className="line-clamp-3 min-h-18 text-sm leading-6 text-muted-foreground">
+        <p
+          className={cn(
+            "text-sm leading-6 text-muted-foreground",
+            !expanded && "line-clamp-3 min-h-18",
+          )}
+        >
           {announcement.description}
         </p>
+        <Button
+          type="button"
+          variant="link"
+          className="mt-1 h-auto px-0 text-xs text-teal"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((current) => !current)}
+        >
+          {expanded ? "Réduire" : "Voir le détail"}
+        </Button>
         <div className="mt-4 flex items-center gap-2 rounded-xl bg-cream/80 px-3 py-2.5 text-xs text-muted-foreground">
           <CalendarDays className="size-3.5 text-teal" />
           {announcement.availability}
         </div>
       </CardContent>
 
-      <CardFooter className="mt-1 justify-between border-ink/6 bg-white px-5 py-4">
+      <CardFooter className="mt-1 flex-wrap justify-between gap-3 border-ink/6 bg-white px-5 py-4">
         <div className="flex min-w-0 items-center gap-2.5">
           <Avatar className="size-8">
             <AvatarFallback
@@ -927,17 +1056,29 @@ function AnnouncementCard({
             {announcement.firstName}
           </span>
         </div>
-        <Button
-          className={cn(
-            "h-9 rounded-xl px-3.5",
-            isNeed
-              ? "bg-coral text-white hover:bg-coral/90"
-              : "bg-teal text-white hover:bg-teal/90",
-          )}
-          onClick={onReply}
-        >
-          {isNeed ? "Je peux aider" : "Ça m’intéresse"}
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            type="button"
+            aria-label={`Signaler l’annonce ${announcement.title}`}
+            title="Signaler"
+            variant="ghost"
+            size="icon-sm"
+            onClick={onReport}
+          >
+            <Flag />
+          </Button>
+          <Button
+            className={cn(
+              "h-9 rounded-xl px-3.5",
+              isNeed
+                ? "bg-coral text-white hover:bg-coral/90"
+                : "bg-teal text-white hover:bg-teal/90",
+            )}
+            onClick={onReply}
+          >
+            {isNeed ? "Je peux aider" : "Ça m’intéresse"}
+          </Button>
+        </div>
       </CardFooter>
     </Card>
   );
@@ -954,8 +1095,6 @@ function OnboardingDialog({
   setCategory,
   commune,
   setCommune,
-  availability,
-  setAvailability,
   onFinish,
 }: {
   open: boolean;
@@ -968,8 +1107,6 @@ function OnboardingDialog({
   setCategory: (category: string) => void;
   commune: string;
   setCommune: (commune: string) => void;
-  availability: string;
-  setAvailability: (availability: string) => void;
   onFinish: () => void;
 }) {
   const roleLabel =
@@ -978,6 +1115,10 @@ function OnboardingDialog({
       : role === "requester"
         ? "trouver de l’aide"
         : "aider et être aidé";
+
+  useEffect(() => {
+    document.getElementById("onboarding-step-title")?.focus();
+  }, [step]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -992,10 +1133,14 @@ function OnboardingDialog({
                 Trouvons la bonne entraide
               </span>
             </div>
-            <DialogTitle className="text-2xl font-bold tracking-tight text-ink">
+            <DialogTitle
+              id="onboarding-step-title"
+              tabIndex={-1}
+              className="text-2xl font-bold tracking-tight text-ink outline-none"
+            >
               {step === 0 && "Que souhaitez-vous faire ?"}
               {step === 1 && `Comment souhaitez-vous ${roleLabel} ?`}
-              {step === 2 && "Où et quand ?"}
+              {step === 2 && "Dans quelle commune ?"}
             </DialogTitle>
             <DialogDescription className="leading-6">
               {step === 0 &&
@@ -1008,13 +1153,18 @@ function OnboardingDialog({
           </DialogHeader>
           <Progress
             value={((step + 1) / 3) * 100}
+            aria-label={`Étape ${step + 1} sur 3`}
             className="mt-5 h-1.5 bg-cream [&_[data-slot=progress-indicator]]:bg-coral"
           />
         </div>
 
         <div className="px-5 py-6 sm:px-7">
           {step === 0 && (
-            <div className="grid gap-3">
+            <div
+              className="grid gap-3"
+              role="radiogroup"
+              aria-label="Votre rôle"
+            >
               {[
                 {
                   value: "requester" as Role,
@@ -1040,6 +1190,9 @@ function OnboardingDialog({
               ].map((option) => (
                 <button
                   key={option.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={role === option.value}
                   className={cn(
                     "flex items-center gap-4 rounded-2xl border p-4 text-left transition",
                     role === option.value
@@ -1082,12 +1235,19 @@ function OnboardingDialog({
           )}
 
           {step === 1 && (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div
+              className="grid grid-cols-2 gap-3 sm:grid-cols-4"
+              role="radiogroup"
+              aria-label="Catégorie d’entraide"
+            >
               {categories.map((item) => {
                 const Icon = categoryIcons[item] ?? Heart;
                 return (
                   <button
                     key={item}
+                    type="button"
+                    role="radio"
+                    aria-checked={category === item}
                     className={cn(
                       "flex min-h-24 flex-col items-center justify-center gap-2 rounded-2xl border p-3 text-center text-sm font-medium transition",
                       category === item
@@ -1112,26 +1272,10 @@ function OnboardingDialog({
                   <MapPin className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     id="onboarding-commune"
+                    autoComplete="address-level2"
                     value={commune}
                     onChange={(event) => setCommune(event.target.value)}
                     placeholder="Ex. Sainte-Hélène"
-                    className="h-12 rounded-xl pl-10"
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="onboarding-availability">
-                  {role === "requester"
-                    ? "Quand en avez-vous besoin ?"
-                    : "Quand êtes-vous disponible ?"}
-                </Label>
-                <div className="relative">
-                  <Clock3 className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    id="onboarding-availability"
-                    value={availability}
-                    onChange={(event) => setAvailability(event.target.value)}
-                    placeholder="Ex. samedi matin, cette semaine…"
                     className="h-12 rounded-xl pl-10"
                   />
                 </div>
@@ -1212,9 +1356,15 @@ function PublishDialog({
           <div className="grid gap-5 px-5 py-6 sm:grid-cols-2 sm:px-7">
             <div className="space-y-2 sm:col-span-2">
               <Label>Type d’annonce</Label>
-              <div className="grid grid-cols-2 gap-2">
+              <div
+                className="grid grid-cols-2 gap-2"
+                role="radiogroup"
+                aria-label="Type d’annonce"
+              >
                 <button
                   type="button"
+                  role="radio"
+                  aria-checked={form.kind === "need"}
                   className={cn(
                     "rounded-xl border px-4 py-3 text-sm font-semibold transition",
                     form.kind === "need"
@@ -1227,6 +1377,8 @@ function PublishDialog({
                 </button>
                 <button
                   type="button"
+                  role="radio"
+                  aria-checked={form.kind === "offer"}
                   className={cn(
                     "rounded-xl border px-4 py-3 text-sm font-semibold transition",
                     form.kind === "offer"
@@ -1246,7 +1398,10 @@ function PublishDialog({
                 value={form.category}
                 onValueChange={(value) => value && update("category", value)}
               >
-                <SelectTrigger id="publish-category" className="h-11 w-full rounded-xl">
+                <SelectTrigger
+                  id="publish-category"
+                  className="h-11 w-full rounded-xl"
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -1265,6 +1420,8 @@ function PublishDialog({
                 id="publish-commune"
                 required
                 minLength={2}
+                maxLength={120}
+                autoComplete="address-level2"
                 value={form.commune}
                 onChange={(event) => update("commune", event.target.value)}
                 placeholder="Ex. Le Temple"
@@ -1278,7 +1435,7 @@ function PublishDialog({
                 id="publish-title"
                 required
                 minLength={5}
-                maxLength={90}
+                maxLength={100}
                 value={form.title}
                 onChange={(event) => update("title", event.target.value)}
                 placeholder="Ex. Une remorque pour déplacer des meubles"
@@ -1290,14 +1447,19 @@ function PublishDialog({
               <Label htmlFor="publish-description">Quelques précisions</Label>
               <Textarea
                 id="publish-description"
+                aria-describedby="publish-public-warning"
                 required
                 minLength={15}
-                maxLength={700}
+                maxLength={1_000}
                 value={form.description}
                 onChange={(event) => update("description", event.target.value)}
                 placeholder="Expliquez simplement le besoin, le matériel disponible et les éventuelles contraintes…"
                 className="min-h-28 rounded-xl"
               />
+              <p id="publish-public-warning" className="text-xs text-coral">
+                N’écrivez aucune adresse précise, aucun téléphone, email ou lien
+                dans le texte public.
+              </p>
             </div>
 
             <div className="space-y-2">
@@ -1305,6 +1467,7 @@ function PublishDialog({
               <Input
                 id="publish-availability"
                 required
+                maxLength={160}
                 value={form.availability}
                 onChange={(event) => update("availability", event.target.value)}
                 placeholder="Ex. samedi matin"
@@ -1318,6 +1481,8 @@ function PublishDialog({
                 id="publish-name"
                 required
                 minLength={2}
+                maxLength={80}
+                autoComplete="given-name"
                 value={form.firstName}
                 onChange={(event) => update("firstName", event.target.value)}
                 placeholder="Prénom ou initiales"
@@ -1331,16 +1496,52 @@ function PublishDialog({
                 id="publish-email"
                 required
                 type="email"
+                maxLength={320}
+                autoComplete="email"
+                aria-describedby="publish-email-help"
                 value={form.email}
                 onChange={(event) => update("email", event.target.value)}
                 placeholder="vous@exemple.fr"
                 className="h-11 rounded-xl"
               />
-              <p className="text-xs text-muted-foreground">
+              <p
+                id="publish-email-help"
+                className="text-xs text-muted-foreground"
+              >
                 Il servira à recevoir les réponses et le lien de gestion de
                 l’annonce.
               </p>
             </div>
+
+            <div className="hidden" aria-hidden="true">
+              <Label htmlFor="publish-website">Site internet</Label>
+              <Input
+                id="publish-website"
+                value={form.website}
+                onChange={(event) => update("website", event.target.value)}
+                tabIndex={-1}
+                autoComplete="off"
+              />
+            </div>
+
+            <aside
+              className="rounded-2xl border border-ink/8 bg-cream/60 p-4 sm:col-span-2"
+              aria-label="Aperçu public de l’annonce"
+            >
+              <p className="text-xs font-semibold uppercase tracking-wide text-teal">
+                Aperçu public
+              </p>
+              <h3 className="mt-2 font-semibold text-ink">
+                {form.title || "Le titre de votre annonce"}
+              </h3>
+              <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
+                {form.description || "Votre description apparaîtra ici."}
+              </p>
+              <p className="mt-2 text-xs text-muted-foreground">
+                {form.commune || "Commune"} ·{" "}
+                {form.availability || "Disponibilité"}
+              </p>
+            </aside>
           </div>
 
           <DialogFooter className="m-0 rounded-b-[1.6rem] px-5 py-4 sm:px-7">
@@ -1357,11 +1558,7 @@ function PublishDialog({
               disabled={loading}
               className="h-11 rounded-xl bg-coral px-5 text-white hover:bg-coral/90"
             >
-              {loading ? (
-                <LoaderCircle className="animate-spin" />
-              ) : (
-                <Heart />
-              )}
+              {loading ? <LoaderCircle className="animate-spin" /> : <Heart />}
               Publier gratuitement
             </Button>
           </DialogFooter>
@@ -1423,6 +1620,8 @@ function ReplyDialog({
                   name="firstName"
                   required
                   minLength={2}
+                  maxLength={80}
+                  autoComplete="given-name"
                   className="h-11 rounded-xl"
                 />
               </div>
@@ -1433,6 +1632,9 @@ function ReplyDialog({
                   name="email"
                   type="email"
                   required
+                  maxLength={320}
+                  autoComplete="email"
+                  aria-describedby="reply-email-help"
                   className="h-11 rounded-xl"
                 />
               </div>
@@ -1444,6 +1646,7 @@ function ReplyDialog({
                 name="message"
                 required
                 minLength={10}
+                maxLength={1_200}
                 defaultValue={
                   isNeed
                     ? `Bonjour ${announcement.firstName}, je pense pouvoir vous aider.`
@@ -1452,7 +1655,19 @@ function ReplyDialog({
                 className="min-h-28 rounded-xl"
               />
             </div>
-            <p className="flex gap-2 text-xs leading-5 text-muted-foreground">
+            <div className="hidden" aria-hidden="true">
+              <Label htmlFor="reply-website">Site internet</Label>
+              <Input
+                id="reply-website"
+                name="website"
+                tabIndex={-1}
+                autoComplete="off"
+              />
+            </div>
+            <p
+              id="reply-email-help"
+              className="flex gap-2 text-xs leading-5 text-muted-foreground"
+            >
               <ShieldCheck className="mt-0.5 size-3.5 shrink-0 text-teal" />
               Votre adresse email sera transmise uniquement à cette personne
               pour qu’elle puisse vous répondre.
@@ -1491,10 +1706,12 @@ function ReplyDialog({
 function AccountDialog({
   open,
   onOpenChange,
+  loading,
   onSubmit,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  loading: boolean;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   return (
@@ -1524,22 +1741,34 @@ function AccountDialog({
                 name="email"
                 type="email"
                 required
+                maxLength={320}
+                autoComplete="email"
                 placeholder="vous@exemple.fr"
                 className="h-12 rounded-xl"
               />
             </div>
+            <div className="hidden" aria-hidden="true">
+              <Label htmlFor="account-website">Site internet</Label>
+              <Input
+                id="account-website"
+                name="website"
+                tabIndex={-1}
+                autoComplete="off"
+              />
+            </div>
             <Button
               type="submit"
+              disabled={loading}
               className="h-12 w-full rounded-xl bg-teal text-white hover:bg-teal/90"
             >
-              <Mail />
+              {loading ? <LoaderCircle className="animate-spin" /> : <Mail />}
               Recevoir mon lien de connexion
             </Button>
             <div className="grid gap-2 rounded-2xl bg-cream p-4 text-sm text-muted-foreground">
               {[
                 "Retrouver et fermer vos annonces",
-                "Enregistrer vos préférences",
-                "Recevoir les nouvelles correspondances",
+                "Lire les réponses reçues",
+                "Supprimer vos données vous-même",
               ].map((item) => (
                 <span key={item} className="flex items-center gap-2">
                   <Check className="size-3.5 text-teal" />
@@ -1548,10 +1777,106 @@ function AccountDialog({
               ))}
             </div>
             <p className="text-center text-[0.7rem] leading-5 text-muted-foreground">
-              Dans cet aperçu, l’envoi est simulé. Le fournisseur d’email sera
-              branché pour la mise en production.
+              Le lien est personnel, utilisable une seule fois et expire après
+              15 minutes.
             </p>
           </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ReportDialog({
+  open,
+  onOpenChange,
+  announcement,
+  loading,
+  onSubmit,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  announcement: Announcement | null;
+  loading: boolean;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  if (!announcement) return null;
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="rounded-[1.6rem] p-0 sm:max-w-lg">
+        <form onSubmit={onSubmit}>
+          <div className="px-6 pt-7">
+            <DialogHeader>
+              <Badge variant="outline" className="mb-2 w-fit text-coral">
+                <Flag />
+                Signalement
+              </Badge>
+              <DialogTitle className="text-xl font-bold text-ink">
+                Signaler « {announcement.title} »
+              </DialogTitle>
+              <DialogDescription>
+                L’annonce sera masquée automatiquement après plusieurs
+                signalements indépendants, puis examinée.
+              </DialogDescription>
+            </DialogHeader>
+          </div>
+          <div className="space-y-4 px-6 py-6">
+            <div className="space-y-2">
+              <Label htmlFor="report-reason">Motif</Label>
+              <Select name="reason" defaultValue="fraude" required>
+                <SelectTrigger id="report-reason" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="fraude">Fraude ou arnaque</SelectItem>
+                  <SelectItem value="coordonnees">
+                    Coordonnées personnelles publiques
+                  </SelectItem>
+                  <SelectItem value="danger">
+                    Intervention dangereuse
+                  </SelectItem>
+                  <SelectItem value="commerce">
+                    Offre commerciale ou payante
+                  </SelectItem>
+                  <SelectItem value="harcelement">
+                    Harcèlement ou contenu offensant
+                  </SelectItem>
+                  <SelectItem value="autre">Autre</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="report-details">Précisions facultatives</Label>
+              <Textarea
+                id="report-details"
+                name="details"
+                maxLength={600}
+                className="min-h-24"
+              />
+            </div>
+            <div className="hidden" aria-hidden="true">
+              <Label htmlFor="report-website">Site internet</Label>
+              <Input
+                id="report-website"
+                name="website"
+                tabIndex={-1}
+                autoComplete="off"
+              />
+            </div>
+          </div>
+          <DialogFooter className="m-0 rounded-b-[1.6rem] px-6 py-4">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => onOpenChange(false)}
+            >
+              Annuler
+            </Button>
+            <Button type="submit" variant="destructive" disabled={loading}>
+              {loading ? <LoaderCircle className="animate-spin" /> : <Flag />}
+              Transmettre le signalement
+            </Button>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>

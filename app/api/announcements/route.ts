@@ -1,173 +1,161 @@
 import { NextResponse } from "next/server";
+import { getDb } from "@/db";
+import { announcements, emailOutbox } from "@/db/schema";
+import { listPublicAnnouncements } from "@/lib/announcement-repository";
+import { categories, seedAnnouncements } from "@/lib/announcements";
+import { apiError } from "@/lib/api";
+import { currentProfileFromRequest } from "@/lib/auth";
+import { emailLayout, queuedEmail } from "@/lib/email";
+import { logger, requestId } from "@/lib/logger";
+import { consumeRateLimit } from "@/lib/rate-limit";
 import {
-  categories,
-  seedAnnouncements,
-  type Announcement,
-  type AnnouncementKind,
-} from "@/lib/announcements";
+  appUrl,
+  escapeHtml,
+  hashToken,
+  randomToken,
+} from "@/lib/security";
+import {
+  announcementInputSchema,
+  dangerousWorkIssue,
+  publicContentIssue,
+  readJson,
+} from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
-async function ensureDatabase() {
-  const { env } = await import("cloudflare:workers");
-  if (!env.DB) return null;
-
-  await env.DB.batch([
-    env.DB.prepare(`
-      CREATE TABLE IF NOT EXISTS announcements (
-        id TEXT PRIMARY KEY,
-        kind TEXT NOT NULL CHECK (kind IN ('need', 'offer')),
-        category TEXT NOT NULL,
-        title TEXT NOT NULL,
-        description TEXT NOT NULL,
-        first_name TEXT NOT NULL,
-        email TEXT NOT NULL,
-        commune TEXT NOT NULL,
-        availability TEXT NOT NULL,
-        status TEXT NOT NULL DEFAULT 'active',
-        created_at INTEGER NOT NULL
-      )
-    `),
-    env.DB.prepare(`
-      CREATE TABLE IF NOT EXISTS responses (
-        id TEXT PRIMARY KEY,
-        announcement_id TEXT NOT NULL,
-        first_name TEXT NOT NULL,
-        email TEXT NOT NULL,
-        message TEXT NOT NULL,
-        created_at INTEGER NOT NULL,
-        FOREIGN KEY (announcement_id) REFERENCES announcements(id) ON DELETE CASCADE
-      )
-    `),
-    env.DB.prepare(`
-      CREATE TABLE IF NOT EXISTS reports (
-        id TEXT PRIMARY KEY,
-        announcement_id TEXT NOT NULL,
-        reason TEXT NOT NULL,
-        created_at INTEGER NOT NULL,
-        FOREIGN KEY (announcement_id) REFERENCES announcements(id) ON DELETE CASCADE
-      )
-    `),
-    env.DB.prepare(
-      "CREATE INDEX IF NOT EXISTS announcements_kind_category_idx ON announcements(kind, category)",
-    ),
-  ]);
-
-  const count = await env.DB.prepare(
-    "SELECT COUNT(*) AS count FROM announcements",
-  ).first<{ count: number }>();
-
-  if ((count?.count ?? 0) === 0) {
-    await env.DB.batch(
-      seedAnnouncements.map((item) =>
-        env.DB.prepare(`
-          INSERT INTO announcements (
-            id, kind, category, title, description, first_name, email,
-            commune, availability, status, created_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).bind(
-          item.id,
-          item.kind,
-          item.category,
-          item.title,
-          item.description,
-          item.firstName,
-          "demo@france-solidaire.fr",
-          item.commune,
-          item.availability,
-          item.status,
-          item.createdAt,
-        ),
-      ),
-    );
+export async function GET(request: Request) {
+  const id = requestId(request);
+  try {
+    const url = new URL(request.url);
+    const kindValue = url.searchParams.get("kind");
+    const category = url.searchParams.get("category") ?? undefined;
+    if (category && category !== "Toutes" && !categories.includes(category as never)) {
+      return NextResponse.json(
+        { error: "Catégorie inconnue.", requestId: id },
+        { status: 400 },
+      );
+    }
+    const result = await listPublicAnnouncements({
+      kind:
+        kindValue === "need" || kindValue === "offer" ? kindValue : undefined,
+      category,
+      query: url.searchParams.get("q") ?? undefined,
+      limit: Number(url.searchParams.get("limit") ?? 50),
+    });
+    return NextResponse.json(result);
+  } catch (error) {
+    if (
+      process.env.DEMO_MODE === "true" ||
+      (process.env.NODE_ENV === "development" && !process.env.DATABASE_URL)
+    ) {
+      return NextResponse.json({
+        announcements: seedAnnouncements,
+        total: seedAnnouncements.length,
+        demo: true,
+      });
+    }
+    return apiError(error, { requestId: id, event: "announcements.list.failed" });
   }
-
-  return env.DB;
-}
-
-export async function GET() {
-  const db = await ensureDatabase();
-  if (!db) return NextResponse.json({ announcements: seedAnnouncements });
-
-  const result = await db
-    .prepare(`
-      SELECT
-        id, kind, category, title, description, first_name AS firstName,
-        commune, availability, status, created_at AS createdAt
-      FROM announcements
-      WHERE status != 'closed'
-      ORDER BY created_at DESC
-      LIMIT 100
-    `)
-    .all<Announcement>();
-
-  return NextResponse.json({ announcements: result.results });
 }
 
 export async function POST(request: Request) {
-  const body = (await request.json()) as Record<string, unknown>;
-  const kind = body.kind as AnnouncementKind;
-  const category = String(body.category ?? "").trim();
-  const title = String(body.title ?? "").trim();
-  const description = String(body.description ?? "").trim();
-  const firstName = String(body.firstName ?? "").trim();
-  const email = String(body.email ?? "").trim().toLowerCase();
-  const commune = String(body.commune ?? "").trim();
-  const availability = String(body.availability ?? "").trim();
+  const id = requestId(request);
+  try {
+    if (!(await consumeRateLimit(request, "announcement.create", 5, 3_600))) {
+      return NextResponse.json(
+        {
+          error: "Trop de publications récentes. Réessayez dans une heure.",
+          requestId: id,
+        },
+        { status: 429, headers: { "Retry-After": "3600" } },
+      );
+    }
+    const input = announcementInputSchema.parse(await readJson(request));
+    const publicIssue = publicContentIssue(input.title, input.description);
+    if (publicIssue) {
+      return NextResponse.json(
+        {
+          error: `Retirez ${publicIssue} du texte public. Vos coordonnées seront transmises de manière privée.`,
+          requestId: id,
+        },
+        { status: 422 },
+      );
+    }
+    if (input.category === "Travaux") {
+      const dangerousIssue = dangerousWorkIssue(input.title, input.description);
+      if (dangerousIssue) {
+        return NextResponse.json(
+          { error: dangerousIssue, requestId: id },
+          { status: 422 },
+        );
+      }
+    }
 
-  if (
-    !["need", "offer"].includes(kind) ||
-    !categories.includes(category as (typeof categories)[number]) ||
-    title.length < 5 ||
-    description.length < 15 ||
-    firstName.length < 2 ||
-    !email.includes("@") ||
-    commune.length < 2 ||
-    availability.length < 2
-  ) {
+    const profile = await currentProfileFromRequest(request);
+    const managementToken = randomToken();
+    const manageUrl = `${appUrl()}/gerer/${managementToken}`;
+    const db = getDb();
+    const [announcement] = await db.transaction(async (transaction) => {
+      const created = await transaction
+        .insert(announcements)
+        .values({
+          profileId: profile?.id,
+          kind: input.kind,
+          category: input.category,
+          title: input.title,
+          description: input.description,
+          firstName: input.firstName,
+          email: input.email,
+          commune: input.commune,
+          availability: input.availability,
+          managementTokenHash: hashToken(managementToken),
+        })
+        .returning();
+
+      await transaction.insert(emailOutbox).values(
+        queuedEmail({
+          kind: "announcement-management",
+          to: input.email,
+          subject: "Gérez votre annonce France Solidaire",
+          text: `Votre annonce est publiée. Gérez-la, consultez les réponses ou fermez-la ici : ${manageUrl}`,
+          html: emailLayout(
+            "Votre annonce est publiée",
+            `<p>Votre annonce « ${escapeHtml(input.title)} » est visible.</p><p><a href="${manageUrl}" style="display:inline-block;background:#263d38;color:#fff;padding:12px 18px;border-radius:12px;text-decoration:none">Gérer mon annonce</a></p><p>Ce lien est personnel : ne le partagez pas.</p>`,
+          ),
+        }),
+      );
+      return created;
+    });
+
+    logger.info("announcement.created", {
+      requestId: id,
+      announcementId: announcement.id,
+      kind: announcement.kind,
+      category: announcement.category,
+    });
     return NextResponse.json(
-      { error: "Merci de vérifier les informations saisies." },
-      { status: 400 },
+      {
+        announcement: {
+          id: announcement.id,
+          kind: announcement.kind,
+          category: announcement.category,
+          title: announcement.title,
+          description: announcement.description,
+          firstName: announcement.firstName,
+          commune: announcement.commune,
+          availability: announcement.availability,
+          status: "active",
+          createdAt: announcement.createdAt.getTime(),
+        },
+        managementEmail: "queued",
+      },
+      { status: 201 },
     );
+  } catch (error) {
+    return apiError(error, {
+      requestId: id,
+      event: "announcement.create.failed",
+    });
   }
-
-  const announcement: Announcement = {
-    id: crypto.randomUUID(),
-    kind,
-    category,
-    title,
-    description,
-    firstName,
-    commune,
-    availability,
-    status: "active",
-    createdAt: Date.now(),
-  };
-
-  const db = await ensureDatabase();
-  if (db) {
-    await db
-      .prepare(`
-        INSERT INTO announcements (
-          id, kind, category, title, description, first_name, email,
-          commune, availability, status, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `)
-      .bind(
-        announcement.id,
-        announcement.kind,
-        announcement.category,
-        announcement.title,
-        announcement.description,
-        announcement.firstName,
-        email,
-        announcement.commune,
-        announcement.availability,
-        announcement.status,
-        announcement.createdAt,
-      )
-      .run();
-  }
-
-  return NextResponse.json({ announcement }, { status: 201 });
 }

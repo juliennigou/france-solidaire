@@ -1,0 +1,27 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.6/schema.json",
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "a11y": {
+        "noLabelWithoutControl": "off",
+        "useSemanticElements": "off"
+      },
+      "correctness": {
+        "useExhaustiveDependencies": "off"
+      },
+      "complexity": {
+        "noImportantStyles": "off"
+      },
+      "style": {
+        "useImportType": "off"
+      }
+    }
+  }
+}

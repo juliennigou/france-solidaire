@@ -1,98 +1,178 @@
-# vinext-starter
+# France Solidaire
 
-A clean full-stack starter running on
-[vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and
-Drizzle support.
+[![CI](https://github.com/juliennigou/france-solidaire/actions/workflows/ci.yml/badge.svg)](https://github.com/juliennigou/france-solidaire/actions/workflows/ci.yml)
+[![Licence MIT](https://img.shields.io/badge/licence-MIT-2563eb.svg)](LICENSE)
+[![Node.js 22+](https://img.shields.io/badge/Node.js-22%2B-339933.svg)](https://nodejs.org/)
 
-## Prerequisites
+Plateforme citoyenne qui met en relation les personnes ayant besoin d’aide et
+les bénévoles proches de chez elles. Le compte est facultatif : une annonce
+peut être publiée sans connexion et reste gérable grâce à un lien privé envoyé
+par email.
 
-- Node.js `>=22.13.0`
+Le projet est open source et peut être déployé par une collectivité, une
+association ou un collectif citoyen sur son propre VPS.
 
-## Quick Start
+> France Solidaire facilite l’entraide de proximité. La plateforme ne remplace
+> ni les services d’urgence, ni les professionnels qualifiés pour les
+> interventions dangereuses.
+
+## Fonctionnalités
+
+- publication d’une demande ou d’une proposition d’aide sans compte obligatoire ;
+- recherche par commune, catégorie, type d’annonce et mots-clés ;
+- réponse avec confirmation de l’adresse email avant transmission ;
+- connexion sans mot de passe et tableau de bord personnel ;
+- lien privé de gestion pour les personnes sans compte ;
+- signalement communautaire et masquage automatique en cas d’abus ;
+- file d’emails fiable, limitations anti-spam et minimisation des données ;
+- interface responsive et accessible construite avec shadcn/ui.
+
+## Architecture
+
+- Next.js App Router en serveur Node.js standalone ;
+- React, TypeScript, Tailwind CSS et shadcn/ui ;
+- PostgreSQL 17, avec Drizzle comme source unique du schéma ;
+- file transactionnelle d’emails et worker SMTP avec reprises sur erreur ;
+- Caddy pour HTTPS et reverse proxy ;
+- Docker Compose pour le VPS ;
+- tâche de maintenance pour les expirations et la minimisation des données.
+
+Les anciennes couches Cloudflare Worker, vinext et D1 ont été retirées. Le
+projet n’a plus qu’une seule cible de déploiement : un VPS Docker.
+
+## Développement local
+
+Prérequis : Node.js 22, npm et PostgreSQL.
 
 ```bash
-npm install
+cp .env.example .env
+# Adaptez DATABASE_URL et les secrets dans .env
+npm ci
+npm run db:migrate
 npm run dev
+```
+
+Pour travailler seulement sur l’interface sans PostgreSQL, ajoutez
+`DEMO_MODE=true`. Les exemples seront visibles, mais toutes les écritures
+renverront explicitement une indisponibilité : aucun faux succès n’est produit.
+
+Pour prévisualiser les emails dans les logs, utilisez
+`EMAIL_TRANSPORT=log` et lancez :
+
+```bash
+npm run email:worker
+```
+
+## Vérifications
+
+```bash
+npm run lint
+npm run typecheck
+npm test
 npm run build
+npm run test:e2e
 ```
 
-This starter does not use `wrangler.jsonc`.
+Le test d’intégration nécessite une base migrée dédiée :
 
-## Included Shape
-
-- edit site code under `app/`
-- `.openai/hosting.json` declares optional Sites D1 and R2 bindings
-- `vite.config.ts` simulates declared bindings for local development
-- `db/schema.ts` starts intentionally empty
-- `examples/d1/` contains an optional D1 example surface
-- `drizzle.config.ts` supports local migration generation when needed
-
-## Workspace Auth Headers
-
-OpenAI workspace sites can read the current user's email from
-`oai-authenticated-user-email`.
-
-SIWC-authenticated workspace sites may also receive
-`oai-authenticated-user-full-name` when the user's SIWC profile has a non-empty
-`name` claim. The full-name value is percent-encoded UTF-8 and is accompanied by
-`oai-authenticated-user-full-name-encoding: percent-encoded-utf-8`.
-
-Treat the full name as optional and fall back to email when it is absent:
-
-```tsx
-import { headers } from "next/headers";
-
-export default async function Home() {
-  const requestHeaders = await headers();
-  const email = requestHeaders.get("oai-authenticated-user-email");
-  const encodedFullName = requestHeaders.get("oai-authenticated-user-full-name");
-  const fullName =
-    encodedFullName &&
-    requestHeaders.get("oai-authenticated-user-full-name-encoding") ===
-      "percent-encoded-utf-8"
-      ? decodeURIComponent(encodedFullName)
-      : null;
-
-  const displayName = fullName ?? email;
-  // ...
-}
+```bash
+RUN_DATABASE_TESTS=true npm run test:integration
 ```
 
-## Optional Dispatch-Owned ChatGPT Sign-In
+## Déploiement VPS
 
-Import the ready-to-use helpers from `app/chatgpt-auth.ts` when the site needs
-optional or required ChatGPT sign-in:
+1. Pointez le DNS du domaine vers le VPS.
+2. Installez Docker Engine et le plugin Compose.
+3. Copiez `.env.example` vers `.env`.
+4. Générez deux secrets longs et différents pour `POSTGRES_PASSWORD` et
+   `RATE_LIMIT_SECRET`. Utilisez un mot de passe PostgreSQL alphanumérique ou
+   base64url afin qu’il reste valide dans l’URL interne.
+5. Configurez `DOMAIN`, `APP_URL`, SMTP et les mentions légales.
+6. Vérifiez que seuls les ports `22`, `80` et `443` sont accessibles.
+7. Démarrez :
 
-- Use `getChatGPTUser()` for optional signed-in UI.
-- Use `requireChatGPTUser(returnTo)` for server-rendered pages that should send
-  anonymous visitors through Sign in with ChatGPT.
-- Use `chatGPTSignInPath(returnTo)` and `chatGPTSignOutPath(returnTo)` for
-  browser links or actions.
-- Pass a same-origin relative `returnTo` path for the destination after sign-in
-  or sign-out. The helper validates and safely encodes it.
-- Mark protected pages with `export const dynamic = "force-dynamic"` because
-  they depend on per-request identity headers.
+```bash
+docker compose build
+docker compose up -d
+docker compose ps
+docker compose logs -f app email-worker
+```
 
-Dispatch owns `/signin-with-chatgpt`, `/signout-with-chatgpt`, `/callback`, the
-OAuth cookies, and identity header injection. Do not implement app routes for
-those reserved paths. Routes that do not import and call the helper remain
-anonymous-compatible.
+L’application applique les migrations avant chaque démarrage. PostgreSQL reste
+sur un réseau Docker interne et n’expose aucun port public. Caddy obtient et
+renouvelle automatiquement le certificat TLS du domaine.
 
-SIWC establishes identity only; it does not prove workspace membership. Use the
-Sites hosting platform's access policy controls for workspace-wide restrictions,
-or enforce explicit server-side membership or allowlist checks.
+## Sauvegardes
 
-Use SIWC for account pages, user-specific dashboards, saved records, and write
-actions tied to the current ChatGPT user. Leave public content anonymous.
+Créer une sauvegarde PostgreSQL compressée :
 
-## Useful Commands
+```bash
+BACKUP_DIRECTORY=/srv/backups/france-solidaire ./scripts/backup-postgres.sh
+```
 
-- `npm run dev`: start local development
-- `npm run build`: verify the vinext build output
-- `npm test`: build the starter and verify its rendered loading skeleton
-- `npm run db:generate`: generate Drizzle migrations after schema changes
+Planifiez cette commande chaque nuit avec le cron du VPS et copiez les
+sauvegardes chiffrées hors du serveur. Testez régulièrement une restauration :
 
-## Learn More
+```bash
+docker compose exec -T postgres pg_restore \
+  --clean --if-exists \
+  --username=france_solidaire \
+  --dbname=france_solidaire \
+  < sauvegarde.dump
+```
 
-- [vinext Documentation](https://github.com/cloudflare/vinext)
-- [Drizzle D1 Guide](https://orm.drizzle.team/docs/get-started/d1-new)
+## Fonctionnement des emails
+
+Les routes ne prétendent jamais qu’un email a été livré. Elles insèrent
+l’opération métier et l’email dans une seule transaction PostgreSQL. Le worker
+SMTP traite ensuite la file, réessaie avec délai exponentiel et conserve un
+état `pending`, `sending`, `sent` ou `failed`. Les réponses restent consultables
+dans l’espace privé même si SMTP connaît une panne temporaire.
+
+## Comptes et gestion
+
+- connexion sans mot de passe avec un lien à usage unique valable 15 minutes ;
+- vérification email des personnes qui répondent, sans imposer de compte ;
+- session `HttpOnly`, `Secure`, `SameSite=Lax`, valable 30 jours ;
+- lien privé de gestion pour les utilisateurs sans compte ;
+- fermeture, réouverture et suppression des annonces ;
+- tableau de bord des réponses reçues.
+
+## Confiance et modération
+
+- limites de taille et validation Zod côté serveur ;
+- quotas par empreinte réseau, sans conserver l’adresse IP brute ;
+- honeypots sur les écritures anonymes ;
+- blocage des emails, téléphones, URLs et adresses précises dans le contenu
+  public ;
+- blocage de travaux nécessitant un professionnel assuré ;
+- signalement effectif ; une annonce est masquée après trois signalements
+  indépendants ;
+- notification de modération via `MODERATION_EMAIL`.
+
+## Conservation
+
+- annonces : expiration après 90 jours ;
+- annonces expirées/fermées et réponses : suppression 30 jours plus tard ;
+- liens magiques : 15 minutes, purge après un jour ;
+- réponses non confirmées : lien de 30 minutes, purge après un jour ;
+- sessions : 30 jours ;
+- données anti-abus : 24 heures ;
+- emails envoyés : 30 jours.
+
+La politique complète est exposée sur `/confidentialite`.
+
+## Contribuer
+
+Les contributions sont bienvenues : corrections, accessibilité, traductions,
+documentation ou nouvelles fonctionnalités. Consultez
+[CONTRIBUTING.md](CONTRIBUTING.md) avant d’ouvrir une pull request.
+
+Pour signaler une vulnérabilité, n’ouvrez pas d’issue publique : suivez la
+procédure décrite dans [SECURITY.md](SECURITY.md).
+
+## Licence
+
+France Solidaire est distribué sous [licence MIT](LICENSE). Vous pouvez
+l’utiliser, le modifier et le redéployer, y compris pour un service local, en
+conservant la notice de licence.

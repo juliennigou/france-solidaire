@@ -42,3 +42,6 @@ next-env.d.ts
 /backups/
 /playwright-report/
 /test-results/
+
+# outils locaux
+/.claude/

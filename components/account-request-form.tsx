@@ -1,7 +1,7 @@
 "use client";
 
 import { type FormEvent, useState } from "react";
-import { LoaderCircle, Mail } from "lucide-react";
+import { LoaderCircle, Mail, MailCheck } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,16 +39,27 @@ export function AccountRequestForm() {
 
   if (queued) {
     return (
-      <p role="status" className="rounded-xl bg-teal/8 p-4 text-sm text-teal">
-        Vérifiez votre boîte email. Le lien personnel est valable 15 minutes.
+      <p
+        role="status"
+        className="callout flex gap-3 text-[0.9375rem] leading-6 text-ink"
+      >
+        <MailCheck
+          className="mt-0.5 size-5 shrink-0 text-blue-france"
+          aria-hidden="true"
+        />
+        <span>
+          Vérifiez votre boîte email. Le lien personnel est valable 15 minutes.
+        </span>
       </p>
     );
   }
 
   return (
-    <form onSubmit={submit} className="space-y-4">
+    <form onSubmit={submit} className="space-y-5">
       <div className="space-y-2">
-        <Label htmlFor="standalone-account-email">Votre email</Label>
+        <Label htmlFor="standalone-account-email" className="font-semibold">
+          Votre email
+        </Label>
         <Input
           id="standalone-account-email"
           name="email"
@@ -56,6 +67,8 @@ export function AccountRequestForm() {
           autoComplete="email"
           required
           maxLength={320}
+          placeholder="vous@exemple.fr"
+          className="h-12"
         />
       </div>
       <div className="hidden" aria-hidden="true">
@@ -67,8 +80,15 @@ export function AccountRequestForm() {
           autoComplete="off"
         />
       </div>
-      <Button className="w-full bg-ink text-white" disabled={working}>
-        {working ? <LoaderCircle className="animate-spin" /> : <Mail />}
+      <Button
+        className="h-12 w-full bg-blue-france font-semibold text-white hover:bg-blue-france-hover"
+        disabled={working}
+      >
+        {working ? (
+          <LoaderCircle className="animate-spin" />
+        ) : (
+          <Mail className="size-4" />
+        )}
         Recevoir mon lien sécurisé
       </Button>
     </form>

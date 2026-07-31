@@ -4,12 +4,19 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* ---------------------------------------------------------------------------
+   France Solidaire — direction artistique
+   Registre institutionnel français (typographie humaniste, formes carrées,
+   bleu France) réchauffé par les tons du soutien : terre battue pour les
+   besoins, émeraude pour les propositions d’aide.
+   --------------------------------------------------------------------------- */
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-geist-sans);
+  --font-sans: var(--font-public-sans);
+  --font-heading: var(--font-public-sans);
+  --font-mono: ui-monospace, "SFMono-Regular", "Menlo", monospace;
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
   --color-popover: var(--popover);
@@ -26,77 +33,164 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+
   --color-ink: var(--ink);
-  --color-coral: var(--coral);
-  --color-terracotta: var(--terracotta);
-  --color-teal: var(--teal);
-  --color-cream: var(--cream);
-  --color-sand: var(--sand);
-  --color-sun: var(--sun);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-alt: var(--alt);
+  --color-blue-france: var(--blue-france);
+  --color-blue-france-hover: var(--blue-france-hover);
+  --color-blue-france-925: var(--blue-france-925);
+  --color-blue-france-950: var(--blue-france-950);
+  --color-blue-france-975: var(--blue-france-975);
+  --color-soutien: var(--soutien);
+  --color-soutien-950: var(--soutien-950);
+  --color-soutien-975: var(--soutien-975);
+  --color-relais: var(--relais);
+  --color-relais-950: var(--relais-950);
+  --color-relais-975: var(--relais-975);
+  --color-marianne: var(--red-marianne);
+
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+  --radius-xl: 0;
+  --radius-2xl: 0;
+  --radius-3xl: 0;
+  --radius-4xl: 0;
 }
 
 :root {
-  --background: #f8f7f2;
-  --foreground: #263d38;
+  /* Palette institutionnelle */
+  --blue-france: #000091;
+  --blue-france-hover: #1212ff;
+  --blue-france-925: #cacafb;
+  --blue-france-950: #e3e3fd;
+  --blue-france-975: #ececfe;
+  --red-marianne: #e1000f;
+
+  /* Tons du soutien */
+  --soutien: #a4471e;
+  --soutien-950: #fddfda;
+  --soutien-975: #feebe6;
+  --relais: #18753c;
+  --relais-950: #c3fad5;
+  --relais-975: #e3fdeb;
+
+  /* Neutres */
+  --ink: #161616;
+  --line: #dddddd;
+  --line-strong: #929292;
+  --alt: #f6f6f6;
+
+  /* Jetons shadcn */
+  --background: #ffffff;
+  --foreground: #161616;
   --card: #ffffff;
-  --card-foreground: #263d38;
+  --card-foreground: #161616;
   --popover: #ffffff;
-  --popover-foreground: #263d38;
-  --primary: #253d38;
+  --popover-foreground: #161616;
+  --primary: #000091;
   --primary-foreground: #ffffff;
-  --secondary: #eeeae0;
-  --secondary-foreground: #263d38;
-  --muted: #efede6;
-  --muted-foreground: #53645e;
-  --accent: #eaf2ee;
-  --accent-foreground: #1f6c5d;
-  --destructive: #c94434;
-  --border: #dedfd8;
-  --input: #d8dcd5;
-  --ring: #378774;
-  --radius: 0.85rem;
-  --ink: #263d38;
-  --coral: #c94434;
-  --terracotta: #a94d3d;
-  --teal: #267362;
-  --cream: #f4f0e6;
-  --sand: #eee9db;
-  --sun: #f5cb67;
+  --secondary: #ececfe;
+  --secondary-foreground: #000091;
+  --muted: #f6f6f6;
+  --muted-foreground: #5b5b5b;
+  --accent: #ececfe;
+  --accent-foreground: #000091;
+  --destructive: #ce0500;
+  --border: #dddddd;
+  --input: #eeeeee;
+  --ring: #0a76f6;
+  --radius: 0;
 }
 
-* {
-  border-color: var(--border);
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  /* Sans cette règle, un fieldset refuse de rétrécir sous la largeur de son
+     contenu et fait déborder la page sur mobile. */
+  fieldset {
+    min-inline-size: 0;
+  }
 }
 
 html {
   scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
   margin: 0;
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  font-family: var(--font-public-sans), "Segoe UI", Arial, sans-serif;
   text-rendering: optimizeLegibility;
+}
+
+button {
+  cursor: pointer;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Indicateur de focus commun à tous les éléments interactifs maison. */
+@layer base {
+  a:focus-visible,
+  button:not([data-slot]):focus-visible,
+  [role="radio"]:focus-visible,
+  summary:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+}
+
+/* Champs de saisie : fond gris et soulignement épais, comme les formulaires
+   des services publics. Ces règles sont volontairement hors `@layer` afin de
+   passer devant les utilitaires Tailwind des composants shadcn. */
+[data-slot="input"],
+[data-slot="textarea"],
+[data-slot="select-trigger"] {
+  border: 0;
+  border-bottom: 2px solid var(--ink);
+  background-color: var(--input);
+  color: var(--ink);
+}
+
+[data-slot="input"]:focus-visible,
+[data-slot="textarea"]:focus-visible,
+[data-slot="select-trigger"]:focus-visible {
+  border-bottom-color: var(--blue-france);
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+[data-slot="input"]::placeholder,
+[data-slot="textarea"]::placeholder {
+  color: #666666;
+}
+
+[data-slot="label"] {
+  color: var(--ink);
+  font-size: 0.9375rem;
+  font-weight: 500;
 }
 
 .skip-link {
   position: fixed;
-  top: 0.75rem;
-  left: 0.75rem;
+  top: 0.5rem;
+  left: 0.5rem;
   z-index: 100;
-  transform: translateY(-180%);
-  border-radius: 0.75rem;
-  background: var(--ink);
-  padding: 0.65rem 1rem;
-  color: white;
+  transform: translateY(-250%);
+  border: 2px solid var(--blue-france);
+  background: #ffffff;
+  padding: 0.75rem 1.25rem;
+  color: var(--blue-france);
   font-weight: 700;
   transition: transform 120ms ease;
 }
@@ -105,125 +199,113 @@ body {
   transform: translateY(0);
 }
 
-button,
-a {
-  -webkit-tap-highlight-color: transparent;
-}
-
-button {
-  cursor: pointer;
-}
-
 .site-container {
-  width: min(100% - 2rem, 1180px);
+  width: min(100% - 2rem, 1200px);
   margin-inline: auto;
 }
 
-.demo-ribbon {
-  display: flex;
-  min-height: 30px;
-  align-items: center;
-  justify-content: center;
-  gap: 0.45rem;
-  background: var(--ink);
-  padding: 0.4rem 1rem;
-  color: rgb(255 255 255 / 0.72);
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-}
+/* Titres ------------------------------------------------------------------ */
 
-.brand-mark {
-  display: flex;
-  width: 2.35rem;
-  height: 2.35rem;
-  align-items: center;
-  justify-content: center;
-  border-radius: 0.8rem;
-  background: color-mix(in srgb, var(--coral), transparent 88%);
-  color: var(--coral);
-  transform: rotate(-4deg);
-  transition: transform 180ms ease;
-}
-
-.group:hover .brand-mark {
-  transform: rotate(3deg) scale(1.03);
-}
-
-.hero-section {
-  position: relative;
-  overflow: hidden;
-  background:
-    radial-gradient(circle at 72% 48%, rgb(245 203 103 / 0.15), transparent 26%),
-    linear-gradient(135deg, #fbfaf5 0%, #f3eee1 100%);
-}
-
-.hero-section::before {
-  position: absolute;
-  inset: 0;
-  background-image: radial-gradient(rgb(38 61 56 / 0.11) 0.75px, transparent 0.75px);
-  background-size: 18px 18px;
-  mask-image: linear-gradient(to right, black, transparent 52%);
-  content: "";
-  opacity: 0.24;
-}
-
-.hero-orb {
-  position: absolute;
-  border-radius: 999px;
-  filter: blur(1px);
-  pointer-events: none;
-}
-
-.hero-orb-one {
-  top: -8rem;
-  right: -6rem;
-  width: 24rem;
-  height: 24rem;
-  border: 1px solid rgb(227 101 80 / 0.13);
-}
-
-.hero-orb-two {
-  right: 31%;
-  bottom: -11rem;
-  width: 20rem;
-  height: 20rem;
-  background: rgb(38 115 98 / 0.06);
-}
-
-.hero-title {
-  max-width: 800px;
+.display-title {
   color: var(--ink);
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(3.2rem, 7.2vw, 6.3rem);
-  font-weight: 500;
-  letter-spacing: -0.065em;
-  line-height: 0.93;
-}
-
-.hero-title span {
-  color: var(--coral);
-  font-style: italic;
+  font-size: clamp(2.35rem, 5.4vw, 3.9rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.06;
+  text-wrap: balance;
 }
 
 .section-title {
   color: var(--ink);
-  font-size: clamp(2rem, 4vw, 3.1rem);
+  font-size: clamp(1.65rem, 3vw, 2.35rem);
   font-weight: 700;
-  letter-spacing: -0.05em;
-  line-height: 1.04;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  text-wrap: balance;
+}
+
+.eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: var(--blue-france);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.eyebrow::before {
+  display: block;
+  width: 1.75rem;
+  height: 0.25rem;
+  background: var(--blue-france);
+  content: "";
+}
+
+/* Liens -------------------------------------------------------------------- */
+
+.text-link {
+  color: var(--blue-france);
+  text-decoration: underline;
+  text-underline-offset: 0.25em;
+  text-decoration-thickness: 1px;
+}
+
+.text-link:hover {
+  color: var(--blue-france-hover);
+  text-decoration-thickness: 2px;
+}
+
+/* Blocs -------------------------------------------------------------------- */
+
+.callout {
+  border-left: 4px solid var(--blue-france);
+  background: var(--blue-france-975);
+  padding: 1.25rem 1.5rem;
+}
+
+.notice-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: var(--blue-france-975);
+  padding: 0.6rem 1rem;
+  color: var(--blue-france);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.brand-mark {
+  display: flex;
+  width: 2.75rem;
+  height: 2.75rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  background: var(--blue-france);
+  color: #ffffff;
 }
 
 .announcement-card {
   transition:
-    transform 180ms ease,
-    box-shadow 180ms ease,
-    border-color 180ms ease;
+    border-color 140ms ease,
+    box-shadow 140ms ease;
 }
 
 .announcement-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 20px 50px rgb(35 61 55 / 0.1);
+  border-color: var(--line-strong);
+  box-shadow: 0 4px 16px rgb(22 22 22 / 0.08);
+}
+
+.hatch-band {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    var(--blue-france-950) 0 2px,
+    transparent 2px 9px
+  );
 }
 
 .scrollbar-none {
@@ -236,11 +318,7 @@ button {
 
 @media (max-width: 640px) {
   .site-container {
-    width: min(100% - 1.25rem, 1180px);
-  }
-
-  .hero-title {
-    font-size: clamp(3.1rem, 16vw, 4.7rem);
+    width: min(100% - 1.5rem, 1200px);
   }
 }
 

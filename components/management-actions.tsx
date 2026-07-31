@@ -64,19 +64,21 @@ export function ManagementActions({
   }
 
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex flex-wrap gap-3">
       {status === "closed" ? (
         <Button
           variant="outline"
+          className="h-11 border-2 border-blue-france px-4 font-semibold text-blue-france hover:bg-blue-france-975"
           disabled={working}
           onClick={() => update("reopen")}
         >
           {working ? <LoaderCircle className="animate-spin" /> : <RotateCcw />}
-          Réouvrir
+          Réouvrir l’annonce
         </Button>
       ) : (
         <Button
           variant="outline"
+          className="h-11 border-2 border-blue-france px-4 font-semibold text-blue-france hover:bg-blue-france-975"
           disabled={working}
           onClick={() => update("close")}
         >
@@ -84,9 +86,14 @@ export function ManagementActions({
           Marquer comme résolue
         </Button>
       )}
-      <Button variant="destructive" disabled={working} onClick={remove}>
+      <Button
+        variant="destructive"
+        className="h-11 px-4 font-semibold"
+        disabled={working}
+        onClick={remove}
+      >
         <Trash2 />
-        Supprimer
+        Supprimer définitivement
       </Button>
     </div>
   );

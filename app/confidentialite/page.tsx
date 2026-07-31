@@ -8,7 +8,7 @@ export default function PrivacyPage() {
   return (
     <LegalPage title="Politique de confidentialité">
       <section>
-        <h2 className="text-xl font-semibold text-ink">Données collectées</h2>
+        <h2 className="mb-3 text-xl font-bold text-ink">Données collectées</h2>
         <p>
           Nous collectons les informations nécessaires à la mise en relation :
           prénom, email, commune, contenu des annonces et messages. L’adresse
@@ -18,7 +18,7 @@ export default function PrivacyPage() {
         </p>
       </section>
       <section>
-        <h2 className="text-xl font-semibold text-ink">Finalités</h2>
+        <h2 className="mb-3 text-xl font-bold text-ink">Finalités</h2>
         <p>
           Ces données servent uniquement à publier et gérer les annonces,
           transmettre les réponses, assurer la sécurité du service et traiter
@@ -27,7 +27,7 @@ export default function PrivacyPage() {
         </p>
       </section>
       <section>
-        <h2 className="text-xl font-semibold text-ink">
+        <h2 className="mb-3 text-xl font-bold text-ink">
           Durées de conservation
         </h2>
         <p>
@@ -40,19 +40,19 @@ export default function PrivacyPage() {
         </p>
       </section>
       <section>
-        <h2 className="text-xl font-semibold text-ink">Vos droits</h2>
+        <h2 className="mb-3 text-xl font-bold text-ink">Vos droits</h2>
         <p>
           Vous pouvez gérer ou supprimer une annonce grâce au lien privé reçu
           par email. Pour exercer vos droits d’accès, rectification,
           opposition ou effacement, écrivez à{" "}
-          <a className="text-teal underline" href={`mailto:${contact}`}>
+          <a className="text-link" href={`mailto:${contact}`}>
             {contact}
           </a>
           . Une réponse vous sera apportée dans les délais légaux.
         </p>
       </section>
       <section>
-        <h2 className="text-xl font-semibold text-ink">Destinataires</h2>
+        <h2 className="mb-3 text-xl font-bold text-ink">Destinataires</h2>
         <p>
           Le propriétaire d’une annonce reçoit le prénom, l’email et le message
           de la personne qui répond. L’hébergeur du VPS, PostgreSQL et le

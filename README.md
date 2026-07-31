@@ -27,6 +27,19 @@ association ou un collectif citoyen sur son propre VPS.
 - file d’emails fiable, limitations anti-spam et minimisation des données ;
 - interface responsive et accessible construite avec shadcn/ui.
 
+## Direction artistique
+
+L’interface reprend les codes des services publics français — typographie
+humaniste (Public Sans), bleu France `#000091`, formes carrées, champs de
+saisie à fond gris et soulignement épais, contrastes AA — réchauffés par deux
+couleurs de soutien : terre battue pour les besoins d’aide, émeraude pour les
+propositions d’aide. Le bleu porte les actions et la structure, les tons chauds
+portent le sens.
+
+France Solidaire est une initiative citoyenne indépendante : ni la Marianne, ni
+le bloc-marque « République Française », ni aucun emblème officiel ne sont
+utilisés, et le pied de page le rappelle explicitement.
+
 ## Architecture
 
 - Next.js App Router en serveur Node.js standalone ;

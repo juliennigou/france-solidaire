@@ -11,22 +11,22 @@ export default function LegalNoticesPage() {
   return (
     <LegalPage title="Mentions légales">
       <section>
-        <h2 className="text-xl font-semibold text-ink">Éditeur du service</h2>
+        <h2 className="mb-3 text-xl font-bold text-ink">Éditeur du service</h2>
         <p>
           {operator}
           <br />
           Contact :{" "}
-          <a className="text-teal underline" href={`mailto:${email}`}>
+          <a className="text-link" href={`mailto:${email}`}>
             {email}
           </a>
         </p>
       </section>
       <section>
-        <h2 className="text-xl font-semibold text-ink">Hébergement</h2>
+        <h2 className="mb-3 text-xl font-bold text-ink">Hébergement</h2>
         <p>{host}</p>
       </section>
       <section>
-        <h2 className="text-xl font-semibold text-ink">
+        <h2 className="mb-3 text-xl font-bold text-ink">
           Règles d’utilisation
         </h2>
         <p>
